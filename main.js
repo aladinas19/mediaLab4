@@ -5,6 +5,8 @@ const ctx = canvas.getContext("2d", { willReadFrequently: true });
 
 const btnStart = document.getElementById("btnStart");
 const btnStop = document.getElementById("btnStop");
+const btnToggleSobel = document.getElementById("btnToggleSobel");
+const btnToggleGray = document.getElementById("btnToggleGray");
 
 const thresholdSlider = document.getElementById("threshold");
 const thresholdValue = document.getElementById("thresholdValue");
@@ -13,6 +15,9 @@ const logEl = document.getElementById("log");
 
 let stream = null;
 let rafId = null;
+
+let sobelEnabled = true;
+let grayscaleEnabled = false;
 
 function log(message) {
   const ts = new Date().toLocaleTimeString();
@@ -27,6 +32,30 @@ thresholdSlider.addEventListener("input", () => {
 
 btnStart.addEventListener("click", startCamera);
 btnStop.addEventListener("click", stopCamera);
+
+btnToggleSobel.addEventListener("click", () => {
+  sobelEnabled = !sobelEnabled;
+
+  if (sobelEnabled) {
+    btnToggleSobel.textContent = "Sobel: ON";
+    log("Sobel filtras įjungtas.");
+  } else {
+    btnToggleSobel.textContent = "Sobel: OFF";
+    log("Sobel filtras išjungtas.");
+  }
+});
+
+btnToggleGray.addEventListener("click", () => {
+  grayscaleEnabled = !grayscaleEnabled;
+
+  if (grayscaleEnabled) {
+    btnToggleGray.textContent = "Grayscale: ON";
+    log("Grayscale įjungtas (veiks tik kai Sobel OFF).");
+  } else {
+    btnToggleGray.textContent = "Grayscale: OFF";
+    log("Grayscale išjungtas.");
+  }
+});
 
 async function startCamera() {
   try {
@@ -54,11 +83,21 @@ async function startCamera() {
 
     resizeCanvasToVideo();
 
-    log("Kamera paleista. Pradedam Sobel edge render loop.");
+    btnToggleSobel.disabled = false;
+    btnToggleGray.disabled = false;
+
+    sobelEnabled = true;
+    grayscaleEnabled = false;
+    btnToggleSobel.textContent = "Sobel: ON";
+    btnToggleGray.textContent = "Grayscale: OFF";
+
+    log("Kamera paleista. Pradedam render loop.");
     startLoop();
   } catch (err) {
     btnStart.disabled = false;
     btnStop.disabled = true;
+    btnToggleSobel.disabled = true;
+    btnToggleGray.disabled = true;
 
     log(`KLAIDA paleidžiant kamerą: ${err?.name || ""} ${err?.message || err}`);
   }
@@ -79,6 +118,8 @@ function stopCamera() {
 
   btnStart.disabled = false;
   btnStop.disabled = true;
+  btnToggleSobel.disabled = true;
+  btnToggleGray.disabled = true;
 }
 
 function resizeCanvasToVideo() {
@@ -115,26 +156,43 @@ function loop() {
 
   ctx.drawImage(video, 0, 0, w, h);
 
-  const imageData = ctx.getImageData(0, 0, w, h);
-  const threshold = Number(thresholdSlider.value);
+  if (sobelEnabled) {
+    const imageData = ctx.getImageData(0, 0, w, h);
+    const threshold = Number(thresholdSlider.value);
+    const out = sobelEdge(imageData, threshold);
+    ctx.putImageData(out, 0, 0);
+    rafId = requestAnimationFrame(loop);
+    return;
+  }
 
-  const out = sobelEdge(imageData, threshold);
-
-  ctx.putImageData(out, 0, 0);
+  if (grayscaleEnabled) {
+    const imageData = ctx.getImageData(0, 0, w, h);
+    applyGrayscale(imageData);
+    ctx.putImageData(imageData, 0, 0);
+    rafId = requestAnimationFrame(loop);
+    return;
+  }
 
   rafId = requestAnimationFrame(loop);
 }
 
-/**
- * Sobel edge detection:
- * - grayscale
- * - Sobel kernel X/Y
- * - magnitude -> threshold
- */
+function applyGrayscale(imageData) {
+  const d = imageData.data;
+  for (let i = 0; i < d.length; i += 4) {
+    const r = d[i];
+    const g = d[i + 1];
+    const b = d[i + 2];
+    const gray = (0.299 * r + 0.587 * g + 0.114 * b) | 0;
+    d[i] = gray;
+    d[i + 1] = gray;
+    d[i + 2] = gray;
+  }
+}
+
+
 function sobelEdge(imageData, threshold) {
   const { data, width, height } = imageData;
 
-  // grayscale buffer (1 kanalas)
   const gray = new Uint8ClampedArray(width * height);
 
   for (let i = 0, p = 0; i < data.length; i += 4, p++) {
@@ -162,12 +220,10 @@ function sobelEdge(imageData, threshold) {
       const a21 = gray[idx + width];
       const a22 = gray[idx + width + 1];
 
-
       const gx =
         (-1 * a00) + (0 * a01) + (1 * a02) +
         (-2 * a10) + (0)      + (2 * a12) +
         (-1 * a20) + (0 * a21) + (1 * a22);
-
 
       const gy =
         ( 1 * a00) + ( 2 * a01) + ( 1 * a02) +
@@ -188,4 +244,4 @@ function sobelEdge(imageData, threshold) {
   return out;
 }
 
-log("Puslapis užkrautas. Paspausk Start, kad įjungtum kamerą ir Sobel edge filtrą.");
+log("Puslapis užkrautas. Paleisk per HTTPS ir paspausk Start.");
