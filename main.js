@@ -1,4 +1,3 @@
-// mediaLab4 – 3 žingsnis: WebRTC kamera + video->canvas loop + grayscale filtras
 
 const video = document.getElementById("video");
 const canvas = document.getElementById("canvas");
@@ -22,10 +21,8 @@ function log(message) {
   logEl.textContent = line + "\n" + logEl.textContent;
 }
 
-// Slider: kol kas tik rodo reikšmę (threshold panaudosim Sobel žingsnyje)
 thresholdSlider.addEventListener("input", () => {
   thresholdValue.textContent = thresholdSlider.value;
-  log(`Threshold pakeistas į ${thresholdSlider.value}`);
 });
 
 btnStart.addEventListener("click", startCamera);
@@ -55,10 +52,9 @@ async function startCamera() {
     video.srcObject = stream;
     await video.play();
 
-    // nustatom canvas resolution pagal video
     resizeCanvasToVideo();
 
-    log("Kamera paleista. Pradedam canvas render loop (grayscale).");
+    log("Kamera paleista. Pradedam Sobel edge render loop.");
     startLoop();
   } catch (err) {
     btnStart.disabled = false;
@@ -109,7 +105,6 @@ function stopLoop() {
 }
 
 function loop() {
-  // jei video dar neparuoštas, palaukiam
   if (video.readyState < 2) {
     rafId = requestAnimationFrame(loop);
     return;
@@ -118,34 +113,79 @@ function loop() {
   const w = canvas.width;
   const h = canvas.height;
 
-  // 1) nupiešiam video kadrą
   ctx.drawImage(video, 0, 0, w, h);
 
-  // 2) pasiimam pixel data
   const imageData = ctx.getImageData(0, 0, w, h);
+  const threshold = Number(thresholdSlider.value);
 
-  // 3) grayscale filtras
-  applyGrayscale(imageData);
+  const out = sobelEdge(imageData, threshold);
 
-  // 4) grąžinam į canvas
-  ctx.putImageData(imageData, 0, 0);
+  ctx.putImageData(out, 0, 0);
 
   rafId = requestAnimationFrame(loop);
 }
 
-function applyGrayscale(imageData) {
-  const d = imageData.data;
-  for (let i = 0; i < d.length; i += 4) {
-    const r = d[i];
-    const g = d[i + 1];
-    const b = d[i + 2];
-    const gray = (0.299 * r + 0.587 * g + 0.114 * b) | 0;
-    d[i] = gray;
-    d[i + 1] = gray;
-    d[i + 2] = gray;
-    // alpha d[i+3] paliekam
+/**
+ * Sobel edge detection:
+ * - grayscale
+ * - Sobel kernel X/Y
+ * - magnitude -> threshold
+ */
+function sobelEdge(imageData, threshold) {
+  const { data, width, height } = imageData;
+
+  // grayscale buffer (1 kanalas)
+  const gray = new Uint8ClampedArray(width * height);
+
+  for (let i = 0, p = 0; i < data.length; i += 4, p++) {
+    const r = data[i];
+    const g = data[i + 1];
+    const b = data[i + 2];
+    gray[p] = (0.299 * r + 0.587 * g + 0.114 * b) | 0;
   }
+
+  const out = new ImageData(width, height);
+  const outData = out.data;
+
+  for (let y = 1; y < height - 1; y++) {
+    for (let x = 1; x < width - 1; x++) {
+      const idx = y * width + x;
+
+      const a00 = gray[idx - width - 1];
+      const a01 = gray[idx - width];
+      const a02 = gray[idx - width + 1];
+
+      const a10 = gray[idx - 1];
+      const a12 = gray[idx + 1];
+
+      const a20 = gray[idx + width - 1];
+      const a21 = gray[idx + width];
+      const a22 = gray[idx + width + 1];
+
+
+      const gx =
+        (-1 * a00) + (0 * a01) + (1 * a02) +
+        (-2 * a10) + (0)      + (2 * a12) +
+        (-1 * a20) + (0 * a21) + (1 * a22);
+
+
+      const gy =
+        ( 1 * a00) + ( 2 * a01) + ( 1 * a02) +
+        ( 0 * a10) + ( 0)       + ( 0 * a12) +
+        (-1 * a20) + (-2 * a21) + (-1 * a22);
+
+      const mag = Math.sqrt(gx * gx + gy * gy);
+      const v = mag > threshold ? 255 : 0;
+
+      const o = idx * 4;
+      outData[o] = v;
+      outData[o + 1] = v;
+      outData[o + 2] = v;
+      outData[o + 3] = 255;
+    }
+  }
+
+  return out;
 }
 
-// Pradinis log
-log("Puslapis užkrautas. Paspausk Start, kad įjungtum kamerą ir grayscale filtrą.");
+log("Puslapis užkrautas. Paspausk Start, kad įjungtum kamerą ir Sobel edge filtrą.");
