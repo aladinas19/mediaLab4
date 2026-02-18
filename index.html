@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="lt">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>mediaLab4 – WebRTC filtras</title>
+
+  <link rel="stylesheet" href="./style.css" />
+</head>
+
+<body>
+  <main class="container">
+    <header class="header">
+      <h1>mediaLab4 – WebRTC filtras</h1>
+      <p class="sub">
+      </p>
+    </header>
+
+    <section class="controls">
+      <button id="btnStart" type="button">Start</button>
+      <button id="btnStop" type="button" disabled>Stop</button>
+
+      <div class="slider">
+        <label for="threshold">
+          Threshold: <span id="thresholdValue">80</span>
+        </label>
+        <input id="threshold" type="range" min="0" max="255" value="80" />
+      </div>
+    </section>
+
+    <section class="grid">
+      <div class="panel">
+        <h2>Originalus video</h2>
+        <video id="video" playsinline autoplay muted></video>
+        <p class="hint">
+
+        </p>
+      </div>
+
+      <div class="panel">
+        <h2>Filtruotas vaizdas (canvas)</h2>
+        <canvas id="canvas"></canvas>
+        <p class="hint">
+        </p>
+      </div>
+    </section>
+
+    <section class="log">
+      <h2>Debug / Log</h2>
+      <pre id="log"></pre>
+    </section>
+  </main>
+
+  <script src="./main.js"></script>
+</body>
+</html>
